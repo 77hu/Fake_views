@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分析历史 - AI虚假评论检测系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 20px;
+        }
+        .filter-btn.active {
+            background-color: #0d6efd;
+            color: white;
+        }
+        .analysis-item {
+            border-bottom: 1px solid #e9ecef;
+            padding: 15px 0;
+        }
+        .analysis-item:last-child {
+            border-bottom: none;
+        }
+        .star-rating {
+            color: #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 导航栏 -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+            <div class="container">
+                <a class="navbar-brand" href="#">
+                    <i class="fas fa-robot me-2"></i>AI虚假评论检测系统
+                </a>
+                <div class="collapse navbar-collapse">
+                    <ul class="navbar-nav ms-auto">
+                        <li class="nav-item">
+                            <span class="nav-link">欢迎, {{ user.username }}</span>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'user_dashboard' %}">仪表盘</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'home' %}">分析评论</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#">退出</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">分析历史记录</h4>
+                <div>
+                    <a href="{% url 'home' %}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>分析新评论
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 筛选按钮 -->
+                <div class="mb-4">
+                    <div class="btn-group">
+                        <a href="{% url 'user_history' %}" class="btn btn-outline-primary {% if analysis_type == '' %}active{% endif %}">全部</a>
+                        <a href="{% url 'user_history' %}?type=real" class="btn btn-outline-success {% if analysis_type == 'real' %}active{% endif %}">真实评论</a>
+                        <a href="{% url 'user_history' %}?type=fake" class="btn btn-outline-danger {% if analysis_type == 'fake' %}active{% endif %}">虚假评论</a>
+                    </div>
+                </div>
+
+                {% if analyses %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>评论标题</th>
+                                <th>产品类别</th>
+                                <th>评分</th>
+                                <th>验证购买</th>
+                                <th>结果</th>
+                                <th>日期</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for analysis in analyses %}
+                            <tr>
+                                <td>{{ analysis.review_title|truncatechars:30 }}</td>
+                                <td>{{ analysis.get_product_category_display }}</td>
+                                <td>
+                                    <div class="star-rating">
+                                        {% for i in "12345" %}
+                                            {% if i|add:"0"|divisibleby:analysis.rating %}
+                                                <i class="fas fa-star"></i>
+                                            {% else %}
+                                                <i class="far fa-star"></i>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if analysis.verified_purchase == 'Y' %}
+                                        <span class="badge bg-success">是</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">否</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if analysis.prediction_result == 'FAKE' %}
+                                        <span class="badge bg-danger">虚假评论 ({{ analysis.fake_probability|floatformat:1 }}%)</span>
+                                    {% else %}
+                                        <span class="badge bg-success">真实评论 ({{ analysis.real_probability|floatformat:1 }}%)</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ analysis.created_at|date:"Y-m-d H:i" }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#analysisModal-{{ analysis.id }}">
+                                        <i class="fas fa-eye"></i> 详情
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 分页 -->
+                {% if total_pages > 1 %}
+                <nav aria-label="Page navigation" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if current_page > 1 %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ current_page|add:"-1" }}{% if analysis_type %}&type={{ analysis_type }}{% endif %}">
+                                <i class="fas fa-chevron-left"></i> 上一页
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% for i in total_pages|get_range %}
+                        <li class="page-item {% if i == current_page %}active{% endif %}">
+                            <a class="page-link" href="?page={{ i }}{% if analysis_type %}&type={{ analysis_type }}{% endif %}">{{ i }}</a>
+                        </li>
+                        {% endfor %}
+
+                        {% if current_page < total_pages %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ current_page|add:"1" }}{% if analysis_type %}&type={{ analysis_type }}{% endif %}">
+                                下一页 <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+
+                <div class="mt-3 text-center text-muted">
+                    显示 {{ start|add:"1" }}-{{ end|yesno:"end,total_analyses" }} 条，共 {{ total_analyses }} 条记录
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <h5>暂无分析历史</h5>
+                    <p class="text-muted">您还没有进行任何评论分析，开始分析您的第一条评论吧！</p>
+                    <a href="{% url 'home' %}" class="btn btn-primary">
+                        <i class="fas fa-microchip me-2"></i>立即分析
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 分析详情模态框 (示例) -->
+        {% for analysis in analyses %}
+        <div class="modal fade" id="analysisModal-{{ analysis.id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">分析详情</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">产品标题</label>
+                            <p>{{ analysis.product_title }}</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">评论标题</label>
+                            <p>{{ analysis.review_title }}</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">评论内容</label>
+                            <p>{{ analysis.review_text }}</p>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">评分</label>
+                                <p>
+                                    {% for i in "12345" %}
+                                        {% if i|add:"0"|divisibleby:analysis.rating %}
+                                            <i class="fas fa-star text-warning"></i>
+                                        {% else %}
+                                            <i class="far fa-star text-muted"></i>
+                                        {% endif %}
+                                    {% endfor %}
+                                    {{ analysis.rating }}/5
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">验证购买</label>
+                                <p>
+                                    {% if analysis.verified_purchase == 'Y' %}
+                                        <span class="badge bg-success">是</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">否</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">产品类别</label>
+                                <p>{{ analysis.get_product_category_display }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">分析时间</label>
+                                <p>{{ analysis.created_at|date:"Y-m-d H:i:s" }}</p>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>虚假评论概率:</span>
+                                <strong>{{ analysis.fake_probability|floatformat:1 }}%</strong>
+                            </div>
+                            <div class="progress mb-4" style="height: 20px;">
+                                <div class="progress-bar bg-danger" style="width: {{ analysis.fake_probability }}%">
+                                    {{ analysis.fake_probability|floatformat:1 }}%
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>真实评论概率:</span>
+                                <strong>{{ analysis.real_probability|floatformat:1 }}%</strong>
+                            </div>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar bg-success" style="width: {{ analysis.real_probability }}%">
+                                    {{ analysis.real_probability|floatformat:1 }}%
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="button" class="btn btn-primary">导出报告</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 添加表格排序功能
+            const table = document.querySelector('.table');
+            if (table) {
+                const headers = table.querySelectorAll('th');
+                headers.forEach((header, index) => {
+                    if (index === headers.length - 1) return; // 跳过"操作"列
+
+                    header.style.cursor = 'pointer';
+                    header.innerHTML += ' <i class="fas fa-sort ms-1"></i>';
+
+                    header.addEventListener('click', () => {
+                        const tableBody = table.querySelector('tbody');
+                        const rows = Array.from(tableBody.querySelectorAll('tr'));
+
+                        // 移除所有排序图标
+                        headers.forEach(h => {
+                            h.innerHTML = h.innerHTML.replace(/<i class="fas fa-sort-[a-z-]+ ms-1"><\/i>/, '');
+                            h.innerHTML += ' <i class="fas fa-sort ms-1"></i>';
+                        });
+
+                        // 确定排序方向
+                        let direction = 1;
+                        if (header.classList.contains('asc')) {
+                            direction = -1;
+                            header.classList.remove('asc');
+                            header.classList.add('desc');
+                            header.innerHTML = header.innerHTML.replace('fa-sort', 'fa-sort-down');
+                        } else {
+                            direction = 1;
+                            header.classList.remove('desc', 'asc');
+                            header.classList.add('asc');
+                            header.innerHTML = header.innerHTML.replace('fa-sort', 'fa-sort-up');
+                        }
+
+                        // 排序
+                        rows.sort((a, b) => {
+                            const aVal = a.children[index].innerText;
+                            const bVal = b.children[index].innerText;
+
+                            if (!isNaN(parseFloat(aVal)) && !isNaN(parseFloat(bVal))) {
+                                return (parseFloat(aVal) - parseFloat(bVal)) * direction;
+                            }
+
+                            return aVal.localeCompare(bVal) * direction;
+                        });
+
+                        // 重新插入行
+                        rows.forEach(row => tableBody.appendChild(row));
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html>

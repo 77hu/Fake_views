@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI虚假评论检测系统 | 智能识别刷单水军</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome 6 图标 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #4361ee;
+            --secondary-color: #3f37c9;
+            --fake-danger: #e63946;
+            --real-success: #2a9d8f;
+            --warning-color: #f4a261;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding-top: 70px; /* 为固定导航栏留出空间 */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: #333;
+        }
+
+        /* ========== 导航栏样式 ========== */
+        .navbar {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--primary-color) !important;
+        }
+        .navbar-brand i {
+            margin-right: 8px;
+        }
+        .nav-link {
+            font-weight: 500;
+        }
+        .nav-link:hover {
+            color: var(--primary-color) !important;
+        }
+        .btn-nav {
+            padding: 6px 16px;
+            font-size: 0.9rem;
+        }
+
+        /* 用户头像 */
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.8rem;
+        }
+
+        /* ========== 页面主体样式 ========== */
+        .container {
+            max-width: 1200px;
+        }
+
+        .page-header {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            padding: 20px;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        .page-header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin: 0;
+        }
+        .page-header p {
+            font-size: 0.95rem;
+            color: #666;
+            margin: 8px 0 0;
+        }
+
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+        }
+
+        .form-section {
+            padding: 30px;
+        }
+
+        .form-label strong {
+            color: #2c3e50;
+        }
+
+        .form-control, .form-select {
+            border: 1.5px solid #dee2e6;
+            border-radius: 8px;
+            padding: 10px 14px;
+            transition: border-color 0.3s;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.25);
+        }
+
+        .btn-primary {
+            background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+            border: none;
+            border-radius: 8px;
+            padding: 12px 0;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+        }
+        .btn-primary:disabled {
+            background: #adb5bd;
+            transform: none;
+        }
+
+        .result-section {
+            padding: 24px;
+            border-radius: 12px;
+            background: white;
+            border-left: 6px solid #ddd;
+        }
+        .fake-result {
+            border-left-color: var(--fake-danger);
+            background-color: #fff8f8;
+        }
+        .real-result {
+            border-left-color: var(--real-success);
+            background-color: #f8fff8;
+        }
+
+        .progress {
+            height: 28px;
+            border-radius: 14px;
+            background-color: #e9ecef;
+            overflow: hidden;
+        }
+        .progress-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+            font-size: 0.9rem;
+            transition: width 0.6s ease;
+        }
+
+        .risk-indicator {
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid transparent;
+        }
+        .high-risk {
+            background-color: #ffebee;
+            border-left-color: var(--fake-danger);
+            border-color: #ffcdd2;
+        }
+        .medium-risk {
+            background-color: #fff8e1;
+            border-left-color: var(--warning-color);
+            border-color: #ffecb3;
+        }
+
+        .stats-box {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            padding: 16px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+
+        .recent-analysis {
+            padding: 14px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.2s;
+        }
+        .recent-analysis:hover {
+            background-color: #f8f9fa;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6c757d;
+        }
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+        .loading-text {
+            animation: pulse 1.5s infinite;
+        }
+
+        @media (max-width: 576px) {
+            .navbar-brand {
+                font-size: 1.2rem;
+            }
+            .navbar-text {
+                font-size: 0.9rem;
+            }
+            .container {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ========== 顶部导航栏 ========== -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top">
+        <div class="container">
+            <!-- Logo 和品牌 -->
+            <a class="navbar-brand" href="{% url 'home' %}">
+                <i class="fas fa-robot"></i>
+                AI虚假评论检测
+            </a>
+
+            <!-- 移动端折叠按钮 -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
+                    aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <!-- 导航链接和用户菜单 -->
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{% url 'home' %}">
+                            <i class="fas fa-home me-1"></i>首页
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'user_dashboard' %}" >
+                            <i class="fas fa-question-circle me-1"></i>用户中心
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                      <a class="nav-link" href="{% url 'net' %}" >
+                        <i class="fas fa-network-wired me-1"></i>网络传播
+                      </a>
+                    </li>
+                    <li class="nav-item">
+                      <a class="nav-link" href="{% url 'heatmap' %}" >
+                        <i class="fas fa-brush me-1"></i>情感热力
+                      </a>
+</li>
+                </ul>
+
+                <div class="d-flex align-items-center">
+                    <!-- 用户信息 -->
+                    {% if user.is_authenticated %}
+                    <div class="navbar-text d-flex align-items-center me-3">
+                        <div class="user-avatar me-2">
+                            {{ user.username|first|upper }}
+                        </div>
+                        <span class="d-none d-md-inline">欢迎, {{ user.username }}</span>
+                    </div>
+                    <a href="{% url 'logout' %}" class="btn btn-outline-danger btn-sm btn-nav">
+                        <i class="fas fa-sign-out-alt me-1"></i>登出
+                    </a>
+                    {% else %}
+                    <a href="{% url 'login' %}" class="btn btn-outline-primary btn-sm btn-nav me-2">
+                        <i class="fas fa-sign-in-alt me-1"></i>登录
+                    </a>
+                    <a href="{% url 'register' %}" class="btn btn-primary btn-sm btn-nav">
+                        <i class="fas fa-user-plus me-1"></i>注册
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ========== 页面主体内容 ========== -->
+    <div class="container">
+        <!-- 页面标题 -->
+        <div class="page-header">
+            <h1><i class="fas fa-robot me-2"></i>AI虚假评论检测系统</h1>
+            <p>基于机器学习算法，智能识别刷单、水军、营销号等虚假评论</p>
+        </div>
+
+        <div class="row">
+            <!-- 主内容区 -->
+            <div class="col-lg-8">
+                <!-- 表单卡片 -->
+                <div class="card">
+                    <div class="card-body form-section">
+                        <form method="POST" id="reviewForm">
+                            {% csrf_token %}
+
+                            <!-- 评分 -->
+                            <div class="mb-4">
+                                <label class="form-label"><i class="fas fa-star me-2 text-warning"></i><strong>产品评分等级</strong></label>
+                                <select name="rating" class="form-select" required>
+                                    <option value="">请选择评分</option>
+                                    <option value="1" {% if form.rating.value == 1 %}selected{% endif %}>非常差</option>
+                                    <option value="2" {% if form.rating.value == 2 %}selected{% endif %}>差</option>
+                                    <option value="3" {% if form.rating.value == 3 %}selected{% endif %}>一般</option>
+                                    <option value="4" {% if form.rating.value == 4 %}selected{% endif %}>好</option>
+                                    <option value="5" {% if form.rating.value == 5 %}selected{% endif %}>非常好</option>
+                                </select>
+                                {% if form.rating.errors %}
+                                <div class="text-danger mt-1"><i class="fas fa-exclamation-circle me-1"></i>{{ form.rating.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <!-- 是否验证购买 -->
+                            <div class="mb-4">
+                                <label class="form-label"><i class="fas fa-shield-alt me-2 text-success"></i><strong>是否验证购买</strong></label>
+                                <select name="verified_purchase" class="form-select" required>
+                                    <option value="">请选择</option>
+                                    <option value="Y" {% if form.verified_purchase.value == "Y" %}selected{% endif %}>✅ 已验证购买</option>
+                                    <option value="N" {% if form.verified_purchase.value == "N" %}selected{% endif %}>❌ 未验证购买</option>
+                                </select>
+                                {% if form.verified_purchase.errors %}
+                                <div class="text-danger mt-1"><i class="fas fa-exclamation-circle me-1"></i>{{ form.verified_purchase.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <!-- 产品类别 -->
+                            <div class="mb-4">
+                                <label class="form-label"><i class="fas fa-tag me-2 text-primary"></i><strong>产品类别</strong></label>
+                                <select name="product_category" class="form-select" required>
+                                    <option value="">请选择类别</option>
+                                    <option value="Shoes" {% if form.product_category.value == "Shoes" %}selected{% endif %}>👟 鞋子</option>
+                                    <option value="Apparel" {% if form.product_category.value == "Apparel" %}selected{% endif %}>👕 服装</option>
+                                    <!-- <option value="Electronics" {% if form.product_category.value == "Electronics" %}selected{% endif %}>📱 电子产品</option>
+                                    <option value="Beauty" {% if form.product_category.value == "Beauty" %}selected{% endif %}>💄 美妆护肤</option>
+                                    <option value="Home" {% if form.product_category.value == "Home" %}selected{% endif %}>🏠 家居用品</option> -->
+                                </select>
+                                {% if form.product_category.errors %}
+                                <div class="text-danger mt-1"><i class="fas fa-exclamation-circle me-1"></i>{{ form.product_category.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <!-- 产品标题 -->
+                            <div class="mb-4">
+                                <label class="form-label"><i class="fas fa-cube me-2 text-info"></i><strong>产品标题</strong></label>
+                                <input type="text" name="product_title" class="form-control"
+                                       placeholder='例如：夏季新款透气运动鞋'
+                                       value="{{ form.product_title.value|default:'' }}"
+                                       required>
+                                {% if form.product_title.errors %}
+                                <div class="text-danger mt-1"><i class="fas fa-exclamation-circle me-1"></i>{{ form.product_title.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <!-- 评论标题 -->
+                            <div class="mb-4">
+                                <label class="form-label"><i class="fas fa-heading me-2 text-secondary"></i><strong>评论标题</strong></label>
+                                <input type="text" name="review_title" class="form-control"
+                                       placeholder='例如：质量不错，穿着很舒服'
+                                       value="{{ form.review_title.value|default:'' }}"
+                                       required>
+                                {% if form.review_title.errors %}
+                                <div class="text-danger mt-1"><i class="fas fa-exclamation-circle me-1"></i>{{ form.review_title.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <!-- 评论内容 -->
+                            <div class="mb-4">
+                                <label class="form-label"><i class="fas fa-comment-alt me-2 text-dark"></i><strong>评论内容</strong></label>
+                                <small class="text-muted d-block mb-2">请详细描述您的使用体验，至少20个字符</small>
+                                <textarea name="review_text" class="form-control" rows="5"
+                                          placeholder="例如：这双鞋穿了两周，透气性很好，但鞋底有点硬..."
+                                          maxlength="2000" required>{{ form.review_text.value|default:'' }}</textarea>
+                                <div class="form-text text-end">
+                                    <span id="charCount">0</span>/2000 字符
+                                </div>
+                                {% if form.review_text.errors %}
+                                <div class="text-danger mt-1"><i class="fas fa-exclamation-circle me-1"></i>{{ form.review_text.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100 py-3">
+                                <i class="fas fa-microchip me-2"></i>
+                                <span id="submitText">AI分析评论</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 结果展示 -->
+                {% if analysis_result %}
+                <div class="card result-section {% if analysis_result.prediction == '虚假评论' %}fake-result{% else %}real-result{% endif %}">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h3 class="h5 mb-0"><i class="fas fa-file-alt me-2"></i>分析结果报告</h3>
+                        <span class="badge bg-light text-dark fw-normal px-3 py-2">
+                            ID: #{{ analysis_result.id }}
+                        </span>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">分析时间</span>
+                            <strong>{{ analysis_result.timestamp }}</strong>
+                        </div>
+                    </div>
+
+                    <div class="mb-4 p-3 bg-white rounded border">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong>最终判定：</strong>
+                            <span class="h5 fw-bold {% if analysis_result.prediction == '虚假评论' %}text-danger{% else %}text-success{% endif %}">
+                                {{ analysis_result.prediction }}
+                            </span>
+                        </div>
+                        <small class="text-muted">基于机器学习模型综合判断</small>
+                    </div>
+
+                    <!-- 概率条 -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><i class="fas fa-times-circle text-danger me-1"></i>虚假评论概率</span>
+                            <strong>{{ analysis_result.fake_prob }}%</strong>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar {% if analysis_result.fake_prob > 70 %}bg-danger{% elif analysis_result.fake_prob > 40 %}bg-warning text-dark{% else %}bg-success{% endif %}"
+                                 style="width: {{ analysis_result.fake_prob }}%">
+                                {{ analysis_result.fake_prob }}%
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><i class="fas fa-check-circle text-success me-1"></i>真实评论概率</span>
+                            <strong>{{ analysis_result.real_prob }}%</strong>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar {% if analysis_result.real_prob > 70 %}bg-success{% elif analysis_result.real_prob > 40 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
+                                 style="width: {{ analysis_result.real_prob }}%">
+                                {{ analysis_result.real_prob }}%
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 风险指标 -->
+                    {% if analysis_result.risk_indicators %}
+                    <div class="mt-3">
+                        <h5 class="h6 mb-3"><i class="fas fa-exclamation-triangle me-2 text-warning"></i>风险特征</h5>
+                        {% for indicator in analysis_result.risk_indicators %}
+                        <div class="risk-indicator {% if indicator.severity == 'high' %}high-risk{% elif indicator.severity == 'medium' %}medium-risk{% endif %}">
+                            <div class="d-flex justify-content-between">
+                                <span>{{ indicator.description }}</span>
+                                <span class="badge {% if indicator.severity == 'high' %}bg-danger{% elif indicator.severity == 'medium' %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                    {{ indicator.severity|title }}
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="mt-4 pt-3 border-top">
+                        <a href="{% url 'analysis_detail' analysis_result.id %}" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-external-link-alt me-1"></i>查看完整分析详情
+                        </a>
+                    </div>
+                </div>
+
+                {% elif error_message %}
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <strong><i class="fas fa-exclamation-triangle me-1"></i>分析失败</strong> {{ error_message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+
+                {% else %}
+                <div class="card result-section">
+                    <div class="empty-state">
+                        <i class="fas fa-comment-dots text-muted"></i>
+                        <h5 class="mt-3">等待分析</h5>
+                        <p class="text-muted">填写上方表单，点击“AI分析评论”开始检测</p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- 右侧边栏 -->
+            <div class="col-lg-4">
+                <!-- 个人统计 -->
+                <div class="card">
+                    <div class="card-header bg-white border-0">
+                        <h3 class="h5 mb-0"><i class="fas fa-chart-line me-2 text-primary"></i>个人统计</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="stats-box">
+                            <div class="d-flex justify-content-between mb-3">
+                                <span><i class="fas fa-calculator me-1"></i>总分析次数</span>
+                                <strong class="fs-5">{{ status.total_analyses }}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span><i class="fas fa-ban me-1"></i>虚假评论比例</span>
+                                <strong class="fs-5">{{ status.fake_ratio|floatformat:1 }}%</strong>
+                            </div>
+                        </div>
+
+                        <div class="progress mb-3" style="height: 22px;">
+                            <div class="progress-bar {% if status.fake_ratio > 60 %}bg-danger{% elif status.fake_ratio > 30 %}bg-warning text-dark{% else %}bg-success{% endif %}"
+                                 style="width: {{ status.fake_ratio }}%">
+                                {{ status.fake_ratio|floatformat:1 }}%
+                            </div>
+                        </div>
+
+                        <div class="alert alert-light border border-primary p-3 mb-0">
+                            <i class="fas fa-lightbulb me-2 text-primary"></i>
+                            <small>系统使用AI模型，智能预测各种评论风险</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 最近分析 -->
+                <div class="card">
+                    <div class="card-header bg-white border-0">
+                        <h3 class="h5 mb-0"><i class="fas fa-history me-2 text-info"></i>最近分析记录</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if recent_analysis %}
+                        <div class="list-group list-group-flush">
+                            {% for analysis in recent_analysis %}
+                            <div class="list-group-item recent-analysis">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <div class="d-flex align-items-center mb-1">
+                                            {% if analysis.prediction_result == 'FAKE' %}
+                                            <span class="badge bg-danger me-2">虚假</span>
+                                            {% else %}
+                                            <span class="badge bg-success me-2">真实</span>
+                                            {% endif %}
+                                            <small>{{ analysis.review_title|truncatechars:20 }}</small>
+                                        </div>
+                                        <small class="text-muted d-block">{{ analysis.review_text|truncatechars:40 }}</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="fw-bold {% if analysis.prediction_result == 'FAKE' %}text-danger{% else %}text-success{% endif %}">
+                                            {{ analysis.fake_probability|floatformat:0 }}%
+                                        </div>
+                                        <small class="text-muted">{{ analysis.created_at|date:"m-d H:i" }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="fas fa-inbox me-1"></i>暂无分析记录
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="mt-4 pt-3 border-top">
+                <h5 class="h6 mb-3" ><i class="fas fa-lightbulb me-2 text-primary"></i>智能应对建议</h5>
+
+                <!-- 商家建议 -->
+                <div class="alert alert-light border border-primary mb-3">
+                    <h6 class="mb-2"><i class="fas fa-store me-1"></i>给商家的建议：</h6>
+                    <ul class="mb-0">
+                        {% if analysis_result.prediction == '虚假评论' %}
+                            <li>该评论存在刷单嫌疑，建议暂时隐藏或标记为“待审核”</li>
+                            <li>可联系平台客服提交证据申请删除</li>
+                            <li>关注该用户是否频繁发布极端好评（1星或5星）</li>
+                            <li>加强真实用户激励机制，提升真实评论占比</li>
+                        {% else %}
+                            <li>该评论可信度高，建议置顶展示以增强消费者信任</li>
+                            <li>可私信用户表达感谢，鼓励其持续分享体验</li>
+                            <li>将此优质评论用于商品详情页或广告素材</li>
+                            <li>分析其关键词（如“质量好”、“穿着舒适”）用于优化产品描述</li>
+                        {% endif %}
+                    </ul>
+                </div>
+
+                <!-- 平台建议 -->
+                <div class="alert alert-light border border-info mb-3">
+                    <h6 class="mb-2"><i class="fas fa-shield-alt me-1"></i>给平台的建议：</h6>
+                    <ul class="mb-0">
+                        {% if analysis_result.prediction == '虚假评论' %}
+                            <li>建议对该用户进行信用评级下调</li>
+                            <li>限制其短期内频繁发布评论的行为</li>
+                            <li>结合购买记录、IP地址、设备指纹进一步验证</li>
+                            <li>将该评论加入人工审核队列</li>
+                        {% else %}
+                            <li>该用户行为符合真实消费者特征，可提升其“优质评论员”权重</li>
+                            <li>推荐其评论至“精选评论”区域</li>
+                            <li>可考虑给予积分奖励或优惠券激励</li>
+                            <li>将其作为训练样本，优化虚假评论识别模型</li>
+                        {% endif %}
+                    </ul>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <a href="#" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-external-link-alt me-1"></i>查看完整报告
+                    </a>
+                    <a href="#" class="btn btn-sm btn-outline-secondary" onclick="printReport(); return false;">
+                        <i class="fas fa-print me-1"></i>打印报告
+                    </a>
+                    <a href="#" class="btn btn-sm btn-outline-success" onclick="downloadReport(); return false;">
+                        <i class="fas fa-download me-1"></i>导出PDF
+                    </a>
+                </div>
+            </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== JS 脚本 ========== -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('reviewForm');
+            const reviewText = document.querySelector('textarea[name="review_text"]');
+            const charCount = document.getElementById('charCount');
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const submitText = document.getElementById('submitText');
+
+            // 实时字符统计
+            if (reviewText && charCount) {
+                charCount.textContent = reviewText.value.length;
+                reviewText.addEventListener('input', function() {
+                    charCount.textContent = this.value.length;
+                });
+            }
+
+            // 表单提交处理
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    if (reviewText && reviewText.value.trim().length < 20) {
+                        alert('评论内容至少需要20个字符，请提供更详细的使用体验。');
+                        e.preventDefault();
+                        return;
+                    }
+
+                    submitBtn.disabled = true;
+                    submitText.textContent = '分析中...';
+                    submitBtn.innerHTML = `
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <span class="loading-text">AI正在分析...</span>
+                    `;
+                });
+            }
+            // 打印报告
+            function printReport() {
+                alert("【功能提示】打印功能已触发！\n实际项目中可调用 window.print() 或生成打印专用页面。");
+            }
+
+            // 下载PDF（提示）
+            function downloadReport() {
+                alert("【功能提示】PDF导出功能已触发！\n实际项目中可使用 html2pdf.js 等库生成PDF文件。");
+            }
+
+            // 错误消息自动滚动
+            {% if error_message %}
+            setTimeout(() => {
+                document.querySelector('.alert').scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+            {% endif %}
+        });
+    </script>
+</body>
+</html>
